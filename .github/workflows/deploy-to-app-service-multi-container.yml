@@ -1,0 +1,57 @@
+name: Deploy OpenVPN to Azure App Service multi-container
+# Use docker-compose.yml as a main docker-compose file
+
+on:
+  push:
+    branches:
+      - main
+
+defaults:
+  run:
+    # Using a specific shell https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#using-a-specific-shell
+    shell: pwsh # Use PowerShell Core
+
+jobs:
+  build:
+    # Find more virtual environments
+    # https://www.dotnetthailand.com/programming-cookbook/github-actions/github-actions-fundamentals#findmorevirtualenvironments
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the latest source code from ${{ github.ref }} commit
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set APP_SERVICE_EXIST variable
+        run: |
+          # Not output to STDERR and store last exit code to $commandResult 
+          $commandResult = & { 
+            az webapp show --name ${{ secrets.APP_SERVICE_NAME }} --resource-group ${{ secrets.RESOURCE_GROUP }} 2>&1 | Out-Null;`
+            $LastExitCode; `
+            $global:LastExitCode = 0;
+          }
+          if($commandResult -eq 0) { "APP_SERVICE_EXIST=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append }
+
+      - name: Publish an app service multi-container
+        run: |
+          if($env:APP_SERVICE_EXIST -eq 1) {
+            "Updating a container with changes in a compose file" 
+            az webapp config container set `
+              --resource-group ${{ secrets:RESOURCE_GROUP }} `
+              --name ${{ secrets.APP_SERVICE_NAME}} `
+              --multicontainer-config-type compose `
+              --multicontainer-config-file docker-compose.yml `
+              --enable-app-service-storage true
+          } else {
+            "Creating a new app service with multi-container"
+            az webapp create `
+              --resource-group ${{ secrets.RESOURCE_GROUP }} `
+              --plan ${{ secrets.APP_SERVICE_PLAN }} `
+              --name ${{ secrets.APP_SERVICE_NAME }} `
+              --multicontainer-config-type compose `
+              --multicontainer-config-file docker-compose.yml
+          }

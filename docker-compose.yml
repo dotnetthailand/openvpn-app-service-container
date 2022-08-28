@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  vpn:
+    image: kylemanna/openvpn:2.4
+    restart: always
+    volumes:
+      - ${WEBAPP_STORAGE_HOME}/openvpn-data:/etc/openvpn
+    ports:
+      - 1194:1194/udp
+    # Why we need to add NET_ADMIN https://stackoverflow.com/a/58381143/1872200
+    cap_add:
+      - NET_ADMIN
